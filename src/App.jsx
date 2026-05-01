@@ -262,6 +262,7 @@ const commentData = [
 const navLinks = [
   { label: 'Landing', href: '#/' },
   { label: 'Login', href: '#/login' },
+  { label: 'Dashboard', href: '#/dashboard' },
   { label: 'Community', href: '#/community' },
   { label: 'Platform', href: '#platform' },
   { label: 'Gateway', href: '#gateway' },
@@ -284,6 +285,7 @@ function App() {
   const route = useHashRoute()
   const isCommunity = route.startsWith('#/community')
   const isLogin = route.startsWith('#/login')
+  const isDashboard = route.startsWith('#/dashboard')
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -309,7 +311,17 @@ function App() {
         </nav>
       </header>
 
-      <main>{isCommunity ? <Community /> : isLogin ? <LoginPage /> : <Landing />}</main>
+      <main>
+        {isCommunity ? (
+          <Community />
+        ) : isLogin ? (
+          <LoginPage />
+        ) : isDashboard ? (
+          <DashboardPage />
+        ) : (
+          <Landing />
+        )}
+      </main>
 
       <footer className="site-footer">
         <div>
@@ -319,6 +331,7 @@ function App() {
         <div className="footer-links">
           <a href="#/">Overview</a>
           <a href="#/login">Login</a>
+          <a href="#/dashboard">Dashboard</a>
           <a href="#/community">Community</a>
           <a href="#platform">Platform</a>
           <a href="#zones">Zones</a>
@@ -380,6 +393,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
 
       setToken(data.token)
       setStatus({ type: 'success', message: 'Gateway authentication succeeded.' })
+      localStorage.setItem('authToken', data.token)
       if (onAuthSuccess) {
         onAuthSuccess(data.token)
       }
@@ -519,7 +533,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
 }
 
 function LoginPage() {
-  const [authToken, setAuthToken] = useState('')
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') || '')
 
   return (
     <section className="login-page">
@@ -613,6 +627,167 @@ function PerformanceMetrics() {
             <p>{metric.detail}</p>
           </div>
         ))}
+      </div>
+    </section>
+  )
+}
+
+function DashboardPage() {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') || '')
+  const [codeInput, setCodeInput] = useState('')
+  const [readResult, setReadResult] = useState('')
+  const [insertResult, setInsertResult] = useState('')
+  const [status, setStatus] = useState(null)
+  const [isBusy, setIsBusy] = useState(false)
+
+  useEffect(() => {
+    const handleStorage = () => setAuthToken(localStorage.getItem('authToken') || '')
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
+  if (!authToken) {
+    return (
+      <section className="dashboard-page">
+        <div className="dashboard-shell">
+          <div className="dashboard-intro">
+            <p className="eyebrow">Gateway dashboard</p>
+            <h1>Login required</h1>
+            <p>Authenticate on the login page to access the code exchange console.</p>
+            <div className="dashboard-steps">
+              <span>Go to #/login</span>
+              <span>Sign in via gateway</span>
+            </div>
+          </div>
+          <div className="dashboard-card">
+            <div className="gateway-status error">
+              <span>No active session found.</span>
+            </div>
+            <div className="dashboard-actions">
+              <a className="primary" href="#/login">
+                Go to login
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const handleInsert = async (event) => {
+    event.preventDefault()
+    setIsBusy(true)
+    setStatus(null)
+    setInsertResult('')
+
+    try {
+      const response = await fetch('/api/insert_code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ code: codeInput }),
+      })
+      const text = await response.text()
+
+      if (!response.ok) {
+        throw new Error(text || 'Insert failed.')
+      }
+
+      setInsertResult(text || 'Insert completed.')
+      setStatus({ type: 'success', message: 'Code inserted successfully.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Insert failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleRead = async () => {
+    setIsBusy(true)
+    setStatus(null)
+    setReadResult('')
+
+    try {
+        const response = await fetch('/api/read_code', {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        })
+      const text = await response.text()
+
+      if (!response.ok) {
+        throw new Error(text || 'Read failed.')
+      }
+
+        setReadResult(text || 'No data returned.')
+        setStatus({ type: 'success', message: 'Code fetched successfully.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Read failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  return (
+    <section className="dashboard-page">
+      <div className="dashboard-shell">
+        <div className="dashboard-intro">
+          <p className="eyebrow">Gateway dashboard</p>
+          <h1>Code exchange console</h1>
+          <p>
+            Send code to the gateway for insertion and pull the latest entry from the database.
+          </p>
+          <div className="dashboard-steps">
+            <span>POST /api/insert_code</span>
+            <span>GET /api/read_code</span>
+          </div>
+        </div>
+        <div className="dashboard-card">
+          <form className="dashboard-form" onSubmit={handleInsert}>
+            <div className="field">
+              <label htmlFor="codeInput">Upload code</label>
+              <textarea
+                id="codeInput"
+                name="codeInput"
+                placeholder="Paste your code payload here"
+                value={codeInput}
+                onChange={(event) => setCodeInput(event.target.value)}
+                rows={6}
+                required
+              ></textarea>
+            </div>
+            <div className="dashboard-actions">
+              <button className="primary" type="submit" disabled={isBusy}>
+                {isBusy ? 'Uploading...' : 'Upload code'}
+              </button>
+              <button className="ghost" type="button" onClick={handleRead} disabled={isBusy}>
+                Fetch stored code
+              </button>
+            </div>
+          </form>
+
+          {status && (
+            <div className={`gateway-status ${status.type}`}>
+              <span>{status.message}</span>
+            </div>
+          )}
+
+          {insertResult && (
+            <div className="dashboard-output">
+              <p>Insert response</p>
+              <pre>{insertResult}</pre>
+            </div>
+          )}
+
+          {readResult && (
+            <div className="dashboard-output">
+              <p>Stored code</p>
+              <pre>{readResult}</pre>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   )

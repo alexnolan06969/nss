@@ -587,6 +587,98 @@ button.primary {
   color: rgba(11, 17, 20, 0.7);
 }
 
+.dashboard-page {
+  margin-top: 48px;
+  display: grid;
+  place-items: center;
+}
+
+.dashboard-shell {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+
+.dashboard-intro h1 {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  margin: 12px 0 14px;
+}
+
+.dashboard-intro p {
+  color: rgba(11, 17, 20, 0.7);
+  line-height: 1.6;
+}
+
+.dashboard-steps {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+  font-weight: 600;
+  color: rgba(11, 17, 20, 0.7);
+}
+
+.dashboard-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 22px;
+  padding: 24px;
+  border: 1px solid rgba(11, 17, 20, 0.08);
+  box-shadow: 0 20px 40px var(--shadow);
+}
+
+.dashboard-form {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-card textarea {
+  border-radius: 14px;
+  border: 1px solid rgba(11, 17, 20, 0.12);
+  padding: 12px;
+  font-size: 0.95rem;
+  background: white;
+  font-family: 'Space Grotesk', sans-serif;
+  resize: vertical;
+}
+
+.dashboard-card textarea:focus {
+  outline: 2px solid rgba(255, 138, 76, 0.3);
+  border-color: rgba(255, 138, 76, 0.6);
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dashboard-output {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(11, 17, 20, 0.05);
+  font-size: 0.9rem;
+}
+
+.dashboard-output p {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(11, 17, 20, 0.6);
+  margin-bottom: 6px;
+}
+
+.dashboard-output pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Space Grotesk', sans-serif;
+  color: rgba(11, 17, 20, 0.8);
+}
+
 .metrics-section {
   margin: 56px auto 0;
   width: min(980px, 100%);
