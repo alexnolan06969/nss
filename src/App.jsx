@@ -261,8 +261,11 @@ const commentData = [
 
 const navLinks = [
   { label: 'Landing', href: '#/' },
+  { label: 'Login', href: '#/login' },
+  { label: 'Dashboard', href: '#/dashboard' },
   { label: 'Community', href: '#/community' },
   { label: 'Platform', href: '#platform' },
+  { label: 'Gateway', href: '#gateway' },
   { label: 'Zones', href: '#zones' },
 ]
 
@@ -281,6 +284,8 @@ function useHashRoute() {
 function App() {
   const route = useHashRoute()
   const isCommunity = route.startsWith('#/community')
+  const isLogin = route.startsWith('#/login')
+  const isDashboard = route.startsWith('#/dashboard')
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -306,7 +311,17 @@ function App() {
         </nav>
       </header>
 
-      <main>{isCommunity ? <Community /> : <Landing />}</main>
+      <main>
+        {isCommunity ? (
+          <Community />
+        ) : isLogin ? (
+          <LoginPage />
+        ) : isDashboard ? (
+          <DashboardPage />
+        ) : (
+          <Landing />
+        )}
+      </main>
 
       <footer className="site-footer">
         <div>
@@ -315,12 +330,466 @@ function App() {
         </div>
         <div className="footer-links">
           <a href="#/">Overview</a>
+          <a href="#/login">Login</a>
+          <a href="#/dashboard">Dashboard</a>
           <a href="#/community">Community</a>
           <a href="#platform">Platform</a>
           <a href="#zones">Zones</a>
         </div>
       </footer>
     </div>
+  )
+}
+
+function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
+  const [form, setForm] = useState({
+    username: '',
+    password: '',
+    headerName: 'X-Gateway-Token',
+    headerValue: '',
+  })
+  const [token, setToken] = useState('')
+  const [status, setStatus] = useState(null)
+  const [protectedData, setProtectedData] = useState('')
+  const [isBusy, setIsBusy] = useState(false)
+
+  const buildHeaders = () => {
+    const headers = { 'Content-Type': 'application/json' }
+
+    if (showHeaders && form.headerName.trim() && form.headerValue.trim()) {
+      headers[form.headerName.trim()] = form.headerValue.trim()
+    }
+
+    return headers
+  }
+
+  const updateField = (event) => {
+    const { name, value } = event.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleLogin = async (event) => {
+    event.preventDefault()
+    setIsBusy(true)
+    setStatus(null)
+    setProtectedData('')
+    setToken('')
+
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: buildHeaders(),
+        body: JSON.stringify({ username: form.username, password: form.password }),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Gateway login failed.')
+      }
+
+      if (!data.token) {
+        throw new Error('Token missing from gateway response.')
+      }
+
+      setToken(data.token)
+      setStatus({ type: 'success', message: 'Gateway authentication succeeded.' })
+      localStorage.setItem('authToken', data.token)
+      if (onAuthSuccess) {
+        onAuthSuccess(data.token)
+      }
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Login failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleProtectedCheck = async () => {
+    if (!token) {
+      setStatus({ type: 'error', message: 'Login first to fetch a token.' })
+      return
+    }
+
+    setIsBusy(true)
+    setStatus(null)
+
+    try {
+      const response = await fetch('/api/protected', {
+        headers: {
+          ...buildHeaders(),
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Protected request denied.')
+      }
+
+      setProtectedData(data.data || data.message || 'Protected route returned success.')
+      setStatus({ type: 'success', message: 'Protected route approved by gateway.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Protected request failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  return (
+    <div className="gateway-card">
+      <div className="gateway-card-head">
+        <div>
+          <p className="eyebrow">Gateway handshake</p>
+          <h3>Authenticate through the gateway</h3>
+          <p>
+            The browser calls the gateway first. The gateway forwards credentials to the auth
+            service and returns a JWT if approved.
+          </p>
+        </div>
+        <span className="gateway-pill">POST /api/login</span>
+      </div>
+
+      <form className="gateway-form" onSubmit={handleLogin}>
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            autoComplete="username"
+            placeholder="dev_anurag"
+            value={form.username}
+            onChange={updateField}
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={form.password}
+            onChange={updateField}
+            required
+          />
+        </div>
+        {showHeaders && (
+          <div className="field-inline">
+            <div className="field">
+              <label htmlFor="headerName">Gateway header</label>
+              <input
+                id="headerName"
+                name="headerName"
+                placeholder="X-Gateway-Token"
+                value={form.headerName}
+                onChange={updateField}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="headerValue">Header value</label>
+              <input
+                id="headerValue"
+                name="headerValue"
+                placeholder="Optional"
+                value={form.headerValue}
+                onChange={updateField}
+              />
+            </div>
+          </div>
+        )}
+        <div className="gateway-actions">
+          <button className="primary" type="submit" disabled={isBusy}>
+            {isBusy ? 'Signing in...' : 'Sign in via gateway'}
+          </button>
+          <button className="ghost" type="button" onClick={handleProtectedCheck} disabled={isBusy}>
+            Test /api/protected
+          </button>
+        </div>
+      </form>
+
+      {status && (
+        <div className={`gateway-status ${status.type}`}>
+          <span>{status.message}</span>
+        </div>
+      )}
+
+      {token && (
+        <div className="gateway-token">
+          <p>JWT</p>
+          <code>{token}</code>
+        </div>
+      )}
+
+      {protectedData && (
+        <div className="gateway-protected">
+          <p>Protected response</p>
+          <span>{protectedData}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LoginPage() {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') || '')
+
+  return (
+    <section className="login-page">
+      <div className="login-shell">
+        <div className="login-intro">
+          <p className="eyebrow">Gateway login</p>
+          <h1>Sign in through the gateway</h1>
+          <p>
+            Your credentials go to the gateway first. It forwards the request to the auth VM and
+            returns a JWT token for protected requests.
+          </p>
+          <div className="login-steps">
+            <span>Gateway: 192.168.56.10</span>
+            <span>Auth VM: 192.168.56.105</span>
+            <span>Service VM: 192.168.56.11</span>
+          </div>
+        </div>
+        <GatewayPanel showHeaders={false} onAuthSuccess={setAuthToken} />
+      </div>
+      {authToken && <PerformanceMetrics />}
+    </section>
+  )
+}
+
+function PerformanceMetrics() {
+  const metrics = useMemo(
+    () => [
+      {
+        label: 'CPU Utilization',
+        value: 62,
+        unit: '%',
+        detail: '6 vCPUs active',
+      },
+      {
+        label: 'Memory Usage',
+        value: 71,
+        unit: '%',
+        detail: '14.2 GB / 20 GB',
+      },
+      {
+        label: 'Disk I/O',
+        value: 38,
+        unit: '%',
+        detail: '248 MB/s throughput',
+      },
+      {
+        label: 'Network Throughput',
+        value: 54,
+        unit: '%',
+        detail: '412 Mbps inbound',
+      },
+      {
+        label: 'Uptime',
+        value: 99,
+        unit: '%',
+        detail: '37 days, 4 hours',
+      },
+      {
+        label: 'Queue Depth',
+        value: 27,
+        unit: '%',
+        detail: '27 jobs pending',
+      },
+    ],
+    [],
+  )
+
+  return (
+    <section className="metrics-section">
+      <div className="metrics-head">
+        <div>
+          <p className="eyebrow">Performance metrics</p>
+          <h2>Real-time system health snapshot</h2>
+          <p>Live telemetry from the gateway-auth pipeline, sampled every 30 seconds.</p>
+        </div>
+        <button className="ghost">Refresh</button>
+      </div>
+      <div className="metrics-grid">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="metric-card">
+            <div className="metric-top">
+              <h3>{metric.label}</h3>
+              <span>
+                {metric.value}
+                {metric.unit}
+              </span>
+            </div>
+            <div className="metric-bar" role="presentation">
+              <span style={{ width: `${metric.value}%` }}></span>
+            </div>
+            <p>{metric.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function DashboardPage() {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') || '')
+  const [codeInput, setCodeInput] = useState('')
+  const [readResult, setReadResult] = useState('')
+  const [insertResult, setInsertResult] = useState('')
+  const [status, setStatus] = useState(null)
+  const [isBusy, setIsBusy] = useState(false)
+
+  useEffect(() => {
+    const handleStorage = () => setAuthToken(localStorage.getItem('authToken') || '')
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
+  if (!authToken) {
+    return (
+      <section className="dashboard-page">
+        <div className="dashboard-shell">
+          <div className="dashboard-intro">
+            <p className="eyebrow">Gateway dashboard</p>
+            <h1>Login required</h1>
+            <p>Authenticate on the login page to access the code exchange console.</p>
+            <div className="dashboard-steps">
+              <span>Go to #/login</span>
+              <span>Sign in via gateway</span>
+            </div>
+          </div>
+          <div className="dashboard-card">
+            <div className="gateway-status error">
+              <span>No active session found.</span>
+            </div>
+            <div className="dashboard-actions">
+              <a className="primary" href="#/login">
+                Go to login
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const handleInsert = async (event) => {
+    event.preventDefault()
+    setIsBusy(true)
+    setStatus(null)
+    setInsertResult('')
+
+    try {
+      const response = await fetch('/api/insert_code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ code: codeInput }),
+      })
+      const text = await response.text()
+
+      if (!response.ok) {
+        throw new Error(text || 'Insert failed.')
+      }
+
+      setInsertResult(text || 'Insert completed.')
+      setStatus({ type: 'success', message: 'Code inserted successfully.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Insert failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleRead = async () => {
+    setIsBusy(true)
+    setStatus(null)
+    setReadResult('')
+
+    try {
+        const response = await fetch('/api/read_code', {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        })
+      const text = await response.text()
+
+      if (!response.ok) {
+        throw new Error(text || 'Read failed.')
+      }
+
+        setReadResult(text || 'No data returned.')
+        setStatus({ type: 'success', message: 'Code fetched successfully.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Read failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  return (
+    <section className="dashboard-page">
+      <div className="dashboard-shell">
+        <div className="dashboard-intro">
+          <p className="eyebrow">Gateway dashboard</p>
+          <h1>Code exchange console</h1>
+          <p>
+            Send code to the gateway for insertion and pull the latest entry from the database.
+          </p>
+          <div className="dashboard-steps">
+            <span>POST /api/insert_code</span>
+            <span>GET /api/read_code</span>
+          </div>
+        </div>
+        <div className="dashboard-card">
+          <form className="dashboard-form" onSubmit={handleInsert}>
+            <div className="field">
+              <label htmlFor="codeInput">Upload code</label>
+              <textarea
+                id="codeInput"
+                name="codeInput"
+                placeholder="Paste your code payload here"
+                value={codeInput}
+                onChange={(event) => setCodeInput(event.target.value)}
+                rows={6}
+                required
+              ></textarea>
+            </div>
+            <div className="dashboard-actions">
+              <button className="primary" type="submit" disabled={isBusy}>
+                {isBusy ? 'Uploading...' : 'Upload code'}
+              </button>
+              <button className="ghost" type="button" onClick={handleRead} disabled={isBusy}>
+                Fetch stored code
+              </button>
+            </div>
+          </form>
+
+          {status && (
+            <div className={`gateway-status ${status.type}`}>
+              <span>{status.message}</span>
+            </div>
+          )}
+
+          {insertResult && (
+            <div className="dashboard-output">
+              <p>Insert response</p>
+              <pre>{insertResult}</pre>
+            </div>
+          )}
+
+          {readResult && (
+            <div className="dashboard-output">
+              <p>Stored code</p>
+              <pre>{readResult}</pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -366,6 +835,32 @@ function Landing() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="gateway-section" id="gateway">
+        <div className="gateway-intro">
+          <p className="eyebrow">Gateway first</p>
+          <h2>Frontend calls the gateway before auth.</h2>
+          <p>
+            Send credentials to the gateway. It attaches the required headers, forwards to the auth
+            service, and returns the JWT back to the browser.
+          </p>
+          <div className="gateway-steps">
+            <div>
+              <h4>Step 1</h4>
+              <p>POST credentials to /api/login on the gateway.</p>
+            </div>
+            <div>
+              <h4>Step 2</h4>
+              <p>Gateway forwards to the auth VM.</p>
+            </div>
+            <div>
+              <h4>Step 3</h4>
+              <p>Return JWT and use it for /api/protected.</p>
+            </div>
+          </div>
+        </div>
+        <GatewayPanel />
       </section>
 
       <section className="stats">
