@@ -6,10 +6,21 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': {
+      '/login': {
         target: 'http://192.168.56.10:5001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/protected': {
+        target: 'http://192.168.56.10:5001',
+        changeOrigin: true,
+      },
+      '/read_code': {
+        target: 'http://192.168.56.10:5001',
+        changeOrigin: true,
+      },
+      '/insert_code': {
+        target: 'http://192.168.56.10:5001',
+        changeOrigin: true,
       },
     },
   },

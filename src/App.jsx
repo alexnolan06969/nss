@@ -262,6 +262,7 @@ const commentData = [
 const navLinks = [
   { label: 'Landing', href: '#/' },
   { label: 'Login', href: '#/login' },
+  { label: 'Dashboard', href: '#/dashboard' },
   { label: 'Community', href: '#/community' },
   { label: 'Platform', href: '#platform' },
   { label: 'Gateway', href: '#gateway' },
@@ -284,6 +285,7 @@ function App() {
   const route = useHashRoute()
   const isCommunity = route.startsWith('#/community')
   const isLogin = route.startsWith('#/login')
+  const isDashboard = route.startsWith('#/dashboard')
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -309,7 +311,9 @@ function App() {
         </nav>
       </header>
 
-      <main>{isCommunity ? <Community /> : isLogin ? <LoginPage /> : <Landing />}</main>
+      <main>
+        {isDashboard ? <Dashboard /> : isCommunity ? <Community /> : isLogin ? <LoginPage /> : <Landing />}
+      </main>
 
       <footer className="site-footer">
         <div>
@@ -328,7 +332,7 @@ function App() {
   )
 }
 
-function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
+function GatewayPanel({ showHeaders = true, onAuthSuccess, redirectOnSuccess = false }) {
   const [form, setForm] = useState({
     username: '',
     password: '',
@@ -363,7 +367,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
     setToken('')
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch('/login', {
         method: 'POST',
         headers: buildHeaders(),
         body: JSON.stringify({ username: form.username, password: form.password }),
@@ -379,9 +383,13 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
       }
 
       setToken(data.token)
+      localStorage.setItem('authToken', data.token)
       setStatus({ type: 'success', message: 'Gateway authentication succeeded.' })
       if (onAuthSuccess) {
         onAuthSuccess(data.token)
+      }
+      if (redirectOnSuccess) {
+        window.location.hash = '#/dashboard'
       }
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Login failed.' })
@@ -400,7 +408,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
     setStatus(null)
 
     try {
-      const response = await fetch('/api/protected', {
+      const response = await fetch('/protected', {
         headers: {
           ...buildHeaders(),
           Authorization: `Bearer ${token}`,
@@ -432,7 +440,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
             service and returns a JWT if approved.
           </p>
         </div>
-        <span className="gateway-pill">POST /api/login</span>
+        <span className="gateway-pill">POST /login</span>
       </div>
 
       <form className="gateway-form" onSubmit={handleLogin}>
@@ -490,7 +498,7 @@ function GatewayPanel({ showHeaders = true, onAuthSuccess }) {
             {isBusy ? 'Signing in...' : 'Sign in via gateway'}
           </button>
           <button className="ghost" type="button" onClick={handleProtectedCheck} disabled={isBusy}>
-            Test /api/protected
+            Test /protected
           </button>
         </div>
       </form>
@@ -537,9 +545,158 @@ function LoginPage() {
             <span>Service VM: 192.168.56.11</span>
           </div>
         </div>
-        <GatewayPanel showHeaders={false} onAuthSuccess={setAuthToken} />
+        <GatewayPanel
+          showHeaders={false}
+          onAuthSuccess={setAuthToken}
+          redirectOnSuccess={true}
+        />
       </div>
       {authToken && <PerformanceMetrics />}
+    </section>
+  )
+}
+
+function Dashboard() {
+  const [token, setToken] = useState(() => localStorage.getItem('authToken') || '')
+  const [readResult, setReadResult] = useState('')
+  const [insertValue, setInsertValue] = useState('')
+  const [status, setStatus] = useState(null)
+  const [isBusy, setIsBusy] = useState(false)
+
+  const buildAuthHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {})
+
+  const handleRead = async () => {
+    if (!token) {
+      setStatus({ type: 'error', message: 'Missing token. Sign in again.' })
+      return
+    }
+
+    setIsBusy(true)
+    setStatus(null)
+    setReadResult('')
+
+    try {
+      const response = await fetch('/read_code', {
+        headers: buildAuthHeaders(),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Read request failed.')
+      }
+
+      setReadResult(data.code || data.data || JSON.stringify(data))
+      setStatus({ type: 'success', message: 'Read request succeeded.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Read request failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleInsert = async (event) => {
+    event.preventDefault()
+    if (!token) {
+      setStatus({ type: 'error', message: 'Missing token. Sign in again.' })
+      return
+    }
+
+    setIsBusy(true)
+    setStatus(null)
+
+    try {
+      const response = await fetch('/insert_code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders(),
+        },
+        body: JSON.stringify({ code: insertValue }),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Insert request failed.')
+      }
+
+      setStatus({ type: 'success', message: 'Insert request succeeded.' })
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Insert request failed.' })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    setToken('')
+    window.location.hash = '#/login'
+  }
+
+  return (
+    <section className="login-page">
+      <div className="login-shell">
+        <div className="login-intro">
+          <p className="eyebrow">Dashboard</p>
+          <h1>Gateway-backed actions</h1>
+          <p>All requests are routed through the gateway on port 5001.</p>
+          <div className="login-steps">
+            <span>Gateway: 192.168.56.10</span>
+            <span>Auth VM: 192.168.56.105</span>
+            <span>Service VM: 192.168.56.11</span>
+          </div>
+        </div>
+        <div className="gateway-card">
+          <div className="gateway-card-head">
+            <div>
+              <p className="eyebrow">Data actions</p>
+              <h3>Read or insert code</h3>
+              <p>Token is pulled from local storage after login.</p>
+            </div>
+            <span className="gateway-pill">Gateway only</span>
+          </div>
+
+          <div className="gateway-actions">
+            <button className="ghost" type="button" onClick={handleRead} disabled={isBusy}>
+              Read code from database
+            </button>
+            <button className="ghost" type="button" onClick={handleLogout}>
+              Log out
+            </button>
+          </div>
+
+          <form className="gateway-form" onSubmit={handleInsert}>
+            <div className="field">
+              <label htmlFor="code">Code to insert</label>
+              <textarea
+                id="code"
+                name="code"
+                rows="4"
+                placeholder="Enter code payload"
+                value={insertValue}
+                onChange={(event) => setInsertValue(event.target.value)}
+                required
+              />
+            </div>
+            <button className="primary" type="submit" disabled={isBusy}>
+              Insert code into database
+            </button>
+          </form>
+
+          {status && (
+            <div className={`gateway-status ${status.type}`}>
+              <span>{status.message}</span>
+            </div>
+          )}
+
+          {readResult && (
+            <div className="gateway-protected">
+              <p>Read result</p>
+              <span>{readResult}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   )
 }
@@ -673,7 +830,7 @@ function Landing() {
           <div className="gateway-steps">
             <div>
               <h4>Step 1</h4>
-              <p>POST credentials to /api/login on the gateway.</p>
+              <p>POST credentials to /login on the gateway.</p>
             </div>
             <div>
               <h4>Step 2</h4>
@@ -681,7 +838,7 @@ function Landing() {
             </div>
             <div>
               <h4>Step 3</h4>
-              <p>Return JWT and use it for /api/protected.</p>
+              <p>Return JWT and use it for /protected.</p>
             </div>
           </div>
         </div>
