@@ -201,13 +201,15 @@ const commentData = [
     user: 'omar_mesh',
     time: '16h ago',
     team: 'Mesh',
-    text: 'Microservice routing rules stabilized after failover test.',
+    redacted: true,
+    text: 'access_logs internal_vault_secrets',
   },
   {
     user: 'yana_cloud',
     time: '16h ago',
     team: 'Cloud',
-    text: 'Cloud cost per build down to $0.08 with new cache.',
+    redacted: true,
+    text: 'database_names : hehe_breakme  ,  hehe_you thought_are_good_weare_better ',
   },
   {
     user: 'hiro_ai',
